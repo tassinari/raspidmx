@@ -42,13 +42,6 @@
 
 #include "bcm_host.h"
 
-
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <fcntl.h>
-#include <string.h>
-#include <pthread.h>
-
 //-------------------------------------------------------------------------
 
 #define NDEBUG
@@ -96,36 +89,10 @@ void usage(void)
     exit(EXIT_FAILURE);
 }
 
+//-------------------------------------------------------------------------
 
-int fd;
-char readbuf[80];
-char end[10];
-int to_end;
-int read_bytes;
-char * path = ""; 
-
-
-
-void * pipeSetup(void * ptr){
-   mknod(path, S_IFIFO|0640, 0);
-   strcpy(end, "end");
-    const int sleepMilliseconds = 1000;
-   while(1) {
-      fd = open(path, O_RDONLY);
-      read_bytes = read(fd, readbuf, sizeof(readbuf));
-      readbuf[read_bytes] = '\0';
-      printf("Received string: \"%s\" and length is %d\n", readbuf, (int)strlen(readbuf));
-      to_end = strcmp(readbuf, end);
-      if (to_end == 0) {
-         close(fd);
-         break;
-      }
-       usleep(sleepMilliseconds * 1000);
-   }
-}
-
-void showFile( char * path){
-
+int main(int argc, char *argv[])
+{
     uint16_t background = 0x000F;
     int32_t layer = 1;
     uint32_t displayNumber = 0;
@@ -135,11 +102,73 @@ void showFile( char * path){
     bool xOffsetSet = false;
     bool yOffsetSet = false;
     bool interactive = true;
-   
+
+    program = basename(argv[0]);
+
+    //---------------------------------------------------------------------
+
+    int opt = 0;
+
+    while ((opt = getopt(argc, argv, "b:d:l:x:y:t:n")) != -1)
+    {
+        switch(opt)
+        {
+        case 'b':
+
+            background = strtol(optarg, NULL, 16);
+            break;
+
+        case 'd':
+
+            displayNumber = strtol(optarg, NULL, 10);
+            break;
+
+        case 'l':
+
+            layer = strtol(optarg, NULL, 10);
+            break;
+
+        case 'x':
+
+            xOffset = strtol(optarg, NULL, 10);
+            xOffsetSet = true;
+            break;
+
+        case 'y':
+
+            yOffset = strtol(optarg, NULL, 10);
+            yOffsetSet = true;
+            break;
+        
+        case 't':
+
+            timeout = atoi(optarg);
+            break;
+
+        case 'n':
+
+            interactive = false;
+            break;
+
+        default:
+
+            usage();
+            break;
+        }
+    }
+
+    //---------------------------------------------------------------------
+
+    if (optind >= argc)
+    {
+        usage();
+    }
+
+    //---------------------------------------------------------------------
 
     IMAGE_LAYER_T imageLayer;
 
-    const char *imagePath = path;
+    const char *imagePath = argv[optind];
 
     if(strcmp(imagePath, "-") == 0)
     {
@@ -242,7 +271,89 @@ void showFile( char * path){
 
     while (run)
     {
-    
+        int c = 0;
+        if (interactive && keyPressed(&c))
+        {
+            c = tolower(c);
+
+            bool moveLayer = false;
+
+            switch (c)
+            {
+            case 27:
+
+                run = false;
+                break;
+
+            case 'a':
+
+                xOffset -= step;
+                moveLayer = true;
+                break;
+
+            case 'd':
+
+                xOffset += step;
+                moveLayer = true;
+                break;
+
+            case 'w':
+
+                yOffset -= step;
+                moveLayer = true;
+                break;
+
+            case 's':
+
+                yOffset += step;
+                moveLayer = true;
+                break;
+
+            case '+':
+
+                if (step == 1)
+                {
+                    step = 5;
+                }
+                else if (step == 5)
+                {
+                    step = 10;
+                }
+                else if (step == 10)
+                {
+                    step = 20;
+                }
+                break;
+
+            case '-':
+
+                if (step == 20)
+                {
+                    step = 10;
+                }
+                else if (step == 10)
+                {
+                    step = 5;
+                }
+                else if (step == 5)
+                {
+                    step = 1;
+                }
+                break;
+            }
+
+            if (moveLayer)
+            {
+                update = vc_dispmanx_update_start(0);
+                assert(update != 0);
+
+                moveImageLayer(&imageLayer, xOffset, yOffset, update);
+
+                result = vc_dispmanx_update_submit_sync(update);
+                assert(result == 0);
+            }
+        }
+
         //---------------------------------------------------------------------
 
         usleep(sleepMilliseconds * 1000);
@@ -252,6 +363,12 @@ void showFile( char * path){
             run = false;
         }
     }
+
+    //---------------------------------------------------------------------
+
+    keyboardReset();
+
+    //---------------------------------------------------------------------
 
     if (background > 0)
     {
@@ -265,63 +382,7 @@ void showFile( char * path){
     result = vc_dispmanx_display_close(display);
     assert(result == 0);
 
-}
-
-
-//-------------------------------------------------------------------------
-
-int main(int argc, char *argv[])
-{
-    
-    program = basename(argv[0]);
     //---------------------------------------------------------------------
-
-    int opt = 0;
-
-    while ((opt = getopt(argc, argv, "p")) != -1)
-    {
-        switch(opt)
-        {
-
-        case 'p':
-
-            path = optarg;
-            break;
-
-        default:
-            usage();
-            break;
-        }
-    }
-
-    //---------------------------------------------------------------------
-
-    if (optind >= argc)
-    {
-        usage();
-    }
-
-    //---------------------------------------------------------------------
-
-    /*creating thread id*/
-    pthread_t id;
-    int ret;
-    
-    /*creating thread*/
-    ret=pthread_create(&id,NULL,&pipeSetup,NULL);
-    if(ret==0){
-        printf("Thread created successfully.\n");
-    }
-    
-  
-    const int sleepMilliseconds = 1000;
-
-    while (1){
-        printf("main loop.\n");
-         usleep(sleepMilliseconds * 1000);
-    }
-
-   
 
     return 0;
 }
