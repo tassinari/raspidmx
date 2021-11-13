@@ -20,7 +20,6 @@
 int fd;
 int read_bytes;
 char readbuf[80];
-uint32_t timeout = 1300;
 pthread_mutex_t lock;
 bool cancelInterupt = false;
 bool showing = false;
@@ -40,39 +39,10 @@ int commandParser(char *command, char **path)
    
 }
 
-void * display(void * ptr){
-    // printf("display received '%s'\n", (char *)ptr);
-
-    // uint32_t currentTime = 0;
-    // pthread_mutex_lock(&lock);
-    // showing = true;
-    // pthread_mutex_unlock(&lock);
-
-    // // Sleep for 10 milliseconds every run-loop
-    // const int sleepMilliseconds = 10;
-    // bool run = true;
-    
-    // while (run)
-    // {
-    
-    //     //---------------------------------------------------------------------
-
-    //     usleep(sleepMilliseconds * 1000);
-    //     pthread_mutex_lock(&lock);
-    //     currentTime += sleepMilliseconds;
-    //     if (currentTime >= timeout || cancelInterupt) {
-    //         run = false;
-    //         cancelInterupt = false;
-    //         showing = false;
-    //     }
-    //     pthread_mutex_unlock(&lock);
-    // }
-    // printf("leaving display\n");
-    return NULL;
-}
 
 void * displayPNG(void *ptr){
 
+    bool isVol = strncmp(ptr, "vol", 3) == 0;
     printf("display received '%s'\n", (char *)ptr);
 
     uint32_t currentTime = 0;
@@ -131,12 +101,14 @@ void * displayPNG(void *ptr){
         addElementBackgroundLayer(&backgroundLayer, display, update);
     }
 
-
+    if(isVol){
         xOffset = 0;
-    
-
-    
-        yOffset = info.height - imageLayer.image.height;
+        yOffset = info.height - imageLayer.image.height;        
+    }
+    else{
+        xOffset = 20;
+        yOffset = 20;
+    }
     
 
     addElementImageLayerOffset(&imageLayer,
@@ -149,7 +121,10 @@ void * displayPNG(void *ptr){
     assert(result == 0);
 
     //---------------------------------------------------------------------
-
+    uint32_t timeout = 1300;
+    if (!isVol){
+        timeout = 2000;
+    }
    
    
     while (run)
